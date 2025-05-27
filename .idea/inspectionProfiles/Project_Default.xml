@@ -1,0 +1,41 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="21">
+            <item index="0" class="java.lang.String" itemvalue="notebook_shim" />
+            <item index="1" class="java.lang.String" itemvalue="jupyterlab_widgets" />
+            <item index="2" class="java.lang.String" itemvalue="prompt_toolkit" />
+            <item index="3" class="java.lang.String" itemvalue="jupyter_client" />
+            <item index="4" class="java.lang.String" itemvalue="pure_eval" />
+            <item index="5" class="java.lang.String" itemvalue="jupyter_core" />
+            <item index="6" class="java.lang.String" itemvalue="jupyterlab_server" />
+            <item index="7" class="java.lang.String" itemvalue="jupyter_server_proxy" />
+            <item index="8" class="java.lang.String" itemvalue="jupyter_server" />
+            <item index="9" class="java.lang.String" itemvalue="jupyterlab_pygments" />
+            <item index="10" class="java.lang.String" itemvalue="typing_extensions" />
+            <item index="11" class="java.lang.String" itemvalue="jupyter_server_terminals" />
+            <item index="12" class="java.lang.String" itemvalue="jupyterlab_vpython" />
+            <item index="13" class="java.lang.String" itemvalue="prometheus_client" />
+            <item index="14" class="java.lang.String" itemvalue="opencv-python" />
+            <item index="15" class="java.lang.String" itemvalue="numpy" />
+            <item index="16" class="java.lang.String" itemvalue="requests" />
+            <item index="17" class="java.lang.String" itemvalue="geocoder" />
+            <item index="18" class="java.lang.String" itemvalue="mss" />
+            <item index="19" class="java.lang.String" itemvalue="pyaudio" />
+            <item index="20" class="java.lang.String" itemvalue="python-telegram-bot" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="flask.app.Flask.before_first_request" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
