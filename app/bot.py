@@ -429,7 +429,7 @@ async def cmd_deal(m: Message, state: FSMContext):
     if not user_data or not user_data.get("is_admin"):
         return await m.answer("❗ Требуются права администратора. Авторизуйтесь через /start")
 
-    await m.answer("Вы можете ввести /cancel для отмены.\n\nВведите название сделки (обязательно):")
+    await m.answer("Вы можете ввести /cancel для отмены.\n\nВведите название сделки (Название ЖК):")
     await state.set_state(DealCreationStates.waiting_for_title)
 
 
@@ -442,7 +442,7 @@ async def process_deal_title(m: Message, state: FSMContext):
         return await m.answer("❌ Слишком длинное название. Максимум 255 символов. Введите снова:")
 
     await state.update_data(title=m.text)
-    await m.answer("Введите адрес (обязательно):")
+    await m.answer("Введите адрес:")
     await state.set_state(DealCreationStates.waiting_for_address)
 
 
@@ -976,7 +976,7 @@ async def process_task_history_id(m: Message, state: FSMContext):
         field = entry.get("field", "–")
         old = entry.get("value").get("from", "")
         new = entry.get("value").get("to", "")
-        author = f"{entry.get("user").get("name")} {entry.get("user").get("lastName")}"
+        author = f"{entry.get('user').get('name')} {entry.get('user').get('lastName')}"
 
         text = "-"
         match field:
@@ -997,6 +997,11 @@ async def process_task_history_id(m: Message, state: FSMContext):
                 text = "Изменен Крайний срок\n"
             case "COMMENT":
                 text = f"Добавлен комментарий №{new}\n"
+            case "RESPONSIBLE_ID":
+                old_resp_name = await get_user_name(domain, token, int(old))
+                new_resp_name = await get_user_name(domain, token, int(new))
+                text = (f"Сменен Исполнитель\n"
+                        f"Изменение: {old_resp_name} → {new_resp_name}\n")
         
         text += f"Автор: {author}"
         messages.append(f"\n<b>{date}</b> - {text}")
