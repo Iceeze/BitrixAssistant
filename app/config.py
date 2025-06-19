@@ -55,3 +55,8 @@ class DealCreationStates(StatesGroup):
 class CommentCreationStates(StatesGroup):
     waiting_for_task_id = State()
     waiting_for_comment_text = State()
+
+class TaskEditStates(StatesGroup):
+    waiting_for_task_id = State()
+    choosing_field = State()
+    editing_field = State()

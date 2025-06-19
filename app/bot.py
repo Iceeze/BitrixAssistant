@@ -1012,6 +1012,168 @@ async def process_task_history_id(m: Message, state: FSMContext):
         await m.answer("\n".join(messages[i:i+chunk_size]), parse_mode="HTML")
 
 
+def edit_fields_keyboard(changed: dict = None) -> InlineKeyboardMarkup:
+    """Клавиатура полей для редактирования задачи"""
+    changed = changed or {}
+
+    def mark(label, field):
+        return f"✅ {label}" if changed.get(field) else label
+
+    keyboard = [
+        [InlineKeyboardButton(text=mark("✏️ Название", "title"), callback_data="edit_field_title")],
+        [InlineKeyboardButton(text=mark("📝 Описание", "description"), callback_data="edit_field_description")],
+        [InlineKeyboardButton(text=mark("🚨 Приоритет", "priority"), callback_data="edit_field_priority")],
+        [InlineKeyboardButton(text=mark("👤 Ответственный", "responsible_id"), callback_data="edit_field_responsible_id")],
+        [InlineKeyboardButton(text=mark("📈 Статус", "status"), callback_data="edit_field_status")],
+        [InlineKeyboardButton(text=mark("⏰ Срок", "deadline"), callback_data="edit_field_deadline")],
+        [InlineKeyboardButton(text="✅ Сохранить", callback_data="edit_save")]
+    ]
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+@dp.message(Command("edit_task"))
+async def cmd_edit_task(m: Message, state: FSMContext):
+    """Редактирование задачи по ID"""
+    await m.answer("Введите ID задачи для редактирования:")
+    await state.set_state(TaskEditStates.waiting_for_task_id)
+
+@dp.message(TaskEditStates.waiting_for_task_id)
+async def process_edit_task_id(m: Message, state: FSMContext):
+    if not m.text.isdigit():
+        return await m.answer("❌ ID должен быть числом. Попробуйте ещё раз:")
+
+    task_id = int(m.text)
+    user = await get_user(m.from_user.id)
+    if not user:
+        return await m.answer("❗ Сначала авторизуйтесь через /start")
+
+    # проверяем права:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://{user['domain']}/rest/tasks.task.get",
+            params={"taskId": task_id, "auth": user["access_token"]}
+        )
+    data = resp.json().get("result", {})
+    task = data.get("task") or {}
+    if not task:
+        return await m.answer("❌ Задача не найдена.")
+
+    is_admin   = user["is_admin"]
+    is_creator = str(task.get("creatorId")) == str(user["user_id"])
+    if not (is_admin or is_creator):
+        return await m.answer("🚫 У вас нет прав редактировать эту задачу.")
+
+    # запомним task_id и пустой словарь изменений
+    await state.update_data(task_id=task_id, changes={})
+    kb = edit_fields_keyboard(changed={})
+    await m.answer("Выберите поле для редактирования:", reply_markup=kb)
+    await state.set_state(TaskEditStates.choosing_field)
+
+@dp.callback_query(TaskEditStates.choosing_field, F.data.startswith("edit_field_"))
+async def callback_choose_field(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+
+    field = callback.data.replace("edit_field_", "")
+
+    names = {
+        "title": "новое название",
+        "description": "новое описание",
+        "priority": "новый приоритет (0 — низкий, 1 — средний, 2 — высокий)",
+        "deadline": "новый срок (ГГГГ-ММ-ДД)",
+        "responsible_id": "ID ответственного сотрудника",
+        "status": "статус задачи (2 — Новая, 3 — В работе, 4 — Ожидает контроля, 5 — Завершена, 6 — Отложена)"
+    }
+
+    if field not in names:
+        await callback.message.answer("⚠️ Неизвестное поле для редактирования.")
+        return
+
+    await state.update_data(current_field=field)
+    await state.set_state(TaskEditStates.editing_field)
+
+    await callback.message.edit_text(
+        f"✏️ Введите {names[field]} (или 'нет' чтобы пропустить):"
+    )
+
+
+@dp.message(TaskEditStates.editing_field)
+async def process_editing_field(m: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data["current_field"]
+    val = m.text.strip()
+    user = await get_user(m.from_user.id)
+
+    # обработка значений
+    if val.lower() != "нет":
+        if field == "deadline":
+            try:
+                datetime.strptime(val, "%Y-%m-%d")
+                val = val + "T00:00:00"
+            except:
+                return await m.answer("❌ Неверный формат даты. Повторите: ГГГГ-ММ-ДД")
+
+        elif field == "priority":
+            if val not in ("0", "1", "2"):
+                return await m.answer("❌ Приоритет должен быть 0, 1 или 2. Повторите:")
+
+        elif field == "status":
+            if val not in ("2", "3", "4", "5", "6"):
+                return await m.answer("❌ Статус должен быть от 2 до 6. Повторите:")
+
+        elif field == "responsible_id":
+            if not val.isdigit():
+                return await m.answer("❌ ID должен быть числом. Повторите:")
+            # Проверка существования пользователя
+            exists = await check_user_exists(user["domain"], user["access_token"], int(val))
+            if not exists:
+                return await m.answer("❌ Пользователь с таким ID не найден. Повторите:")
+
+    changes = data.get("changes", {})
+    if val.lower() != "нет":
+        changes[field.upper()] = int(val) if val.isdigit() else val
+    await state.update_data(changes=changes)
+
+    kb = edit_fields_keyboard(changed=changes)
+    await m.answer("Что ещё хотите изменить? Или нажмите «Сохранить»", reply_markup=kb)
+    await state.set_state(TaskEditStates.choosing_field)
+
+@dp.callback_query(F.data == "edit_save", TaskEditStates.choosing_field)
+async def callback_save(c: CallbackQuery, state: FSMContext):
+    data    = await state.get_data()
+    task_id = data["task_id"]
+    changes = data["changes"]
+    user    = await get_user(c.from_user.id)
+
+    if not changes:
+        await c.answer("⚠️ Нет изменений для сохранения.", show_alert=True)
+        return
+
+    params = {"auth": user["access_token"]}
+    body   = {"taskId": task_id, "fields": changes}
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"https://{user['domain']}/rest/tasks.task.update",
+            params=params,
+            json=body
+        )
+    result = resp.json()
+    if result.get("error"):
+        text = result.get("error_description", "Неизвестная ошибка")
+        await c.message.edit_text(f"❌ Ошибка: {text}")
+    else:
+        await c.message.edit_text(f"✅ Задача №{task_id} успешно обновлена!")
+
+    await state.clear()
+    await c.answer()
+
+@dp.callback_query(F.data == "edit_cancel", TaskEditStates.choosing_field)
+async def callback_cancel(c: CallbackQuery, state: FSMContext):
+    await c.message.edit_text("❌ Редактирование отменено.")
+    await state.clear()
+    await c.answer()
+
+
 @dp.message(Command("help"))
 async def cmd_help(m: Message):
     """Справка о командах бота"""
@@ -1020,6 +1182,7 @@ async def cmd_help(m: Message):
 /start - Авторизация в Bitrix24
 /tasks - Вывести список задач
 /task - Создать задачу
+/edit_task - Редактировать задачу
 /comment - Добавить комментарий к задаче
 /deal - Создать сделку (❗Только для админов❗)
 /deals - Показать список сделок
