@@ -93,7 +93,8 @@ async def check_user_exists(domain: str, access_token: str, user_id: int) -> boo
             params={"auth": access_token, "ID": user_id}
         )
         data = resp.json()
-        return data.get("result") is not None
+        users = data.get("result", [])
+        return len(users) > 0
 
 
 async def register_webhooks(domain: str, access_token: str):

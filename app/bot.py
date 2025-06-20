@@ -1,6 +1,7 @@
 import logging
 import httpx
 import json
+import html
 
 from datetime import datetime
 from aiogram import F
@@ -972,7 +973,7 @@ async def process_task_history_id(m: Message, state: FSMContext):
             date_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S%z")
             date = date_date.strftime("%Y-%m-%d %H:%M")
         except Exception as e:
-            logging.error(f"Ошибка обработки даты: {date}")
+            logging.error(f"Ошибка обработки даты {date}")
         field = entry.get("field", "–")
         old = entry.get("value").get("from", "")
         new = entry.get("value").get("to", "")
@@ -1047,16 +1048,16 @@ async def process_edit_task_id(m: Message, state: FSMContext):
     if not user:
         return await m.answer("❗ Сначала авторизуйтесь через /start")
 
-    # проверяем права:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://{user['domain']}/rest/tasks.task.get",
-            params={"taskId": task_id, "auth": user["access_token"]}
-        )
-    data = resp.json().get("result", {})
-    task = data.get("task") or {}
-    if not task:
-        return await m.answer("❌ Задача не найдена.")
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://{user['domain']}/rest/tasks.task.get",
+                params={"taskId": task_id, "auth": user["access_token"]}
+            )
+        data = resp.json().get("result", {})
+        task = data.get("task") or {}
+    except:
+        return await m.answer("❌ Ошибка получения задачи по ID")
 
     is_admin   = user["is_admin"]
     is_creator = str(task.get("creatorId")) == str(user["user_id"])
@@ -1103,7 +1104,6 @@ async def process_editing_field(m: Message, state: FSMContext):
     val = m.text.strip()
     user = await get_user(m.from_user.id)
 
-    # обработка значений
     if val.lower() != "нет":
         if field == "deadline":
             try:
@@ -1160,7 +1160,8 @@ async def callback_save(c: CallbackQuery, state: FSMContext):
     result = resp.json()
     if result.get("error"):
         text = result.get("error_description", "Неизвестная ошибка")
-        await c.message.edit_text(f"❌ Ошибка: {text}")
+        safe_text = html.escape(text)
+        await c.message.edit_text(f"❌ Ошибка сохранения изменений:\n{safe_text}")
     else:
         await c.message.edit_text(f"✅ Задача №{task_id} успешно обновлена!")
 
@@ -1184,7 +1185,7 @@ async def cmd_help(m: Message):
 /task - Создать задачу
 /edit_task - Редактировать задачу
 /comment - Добавить комментарий к задаче
-/deal - Создать сделку (❗Только для админов❗)
+/deal - Создать сделку (❗Только для администраторов❗)
 /deals - Показать список сделок
 /employees - Получить список сотрудников
 /task_history - Получить историю изменений задачи
